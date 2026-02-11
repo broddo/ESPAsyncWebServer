@@ -164,13 +164,16 @@ bool AsyncWebSocketMessageBuffer::reserve(size_t size) {
 AsyncWebSocketMessage::AsyncWebSocketMessage(AsyncWebSocketSharedBuffer buffer, uint8_t opcode, bool mask)
   : _WSbuffer{buffer}, _opcode(opcode & 0x07), _mask{mask}, _status{_WSbuffer ? WS_MSG_SENDING : WS_MSG_ERROR} {}
 
-void AsyncWebSocketMessage::ack(size_t len, uint32_t time) {
+size_t AsyncWebSocketMessage::ack(size_t len, uint32_t time) {
   (void)time;
-  _acked += len;
+  size_t needed = _ack - _acked;
+  size_t used = (len < needed) ? len : needed;
+  _acked += used;
   if (_sent >= _WSbuffer->size() && _acked >= _ack) {
     _status = WS_MSG_SENT;
   }
   // ets_printf("A: %u\n", len);
+  return len - used;
 }
 
 size_t AsyncWebSocketMessage::send(AsyncClient *client) {
@@ -181,9 +184,7 @@ size_t AsyncWebSocketMessage::send(AsyncClient *client) {
   if (_status != WS_MSG_SENDING) {
     return 0;
   }
-  if (_acked < _ack) {
-    return 0;
-  }
+
   if (_sent == _WSbuffer->size()) {
     if (_acked == _ack) {
       _status = WS_MSG_SENT;
@@ -201,6 +202,10 @@ size_t AsyncWebSocketMessage::send(AsyncClient *client) {
 
   if (window < toSend) {
     toSend = window;
+  }
+
+  if (toSend == 0) {
+    return 0;
   }
 
   _sent += toSend;
@@ -328,13 +333,19 @@ void AsyncWebSocketClient::_onAck(size_t len, uint32_t time) {
   }
 
   if (len && !_messageQueue.empty()) {
-    _messageQueue.front().ack(len, time);
+    for (auto &msg : _messageQueue) {
+      if (len == 0) {
+        break;
+      }
+      len = msg.ack(len, time);
+    }
   }
 
   _clearQueue();
 
   _runQueue();
 }
+
 
 void AsyncWebSocketClient::_onPoll() {
   if (!_client) {
