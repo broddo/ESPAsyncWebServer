@@ -202,6 +202,9 @@ public:
   bool betweenFrames() const {
     return _acked == _ack;
   }
+  bool sent() const {
+    return _sent == _WSbuffer->size();
+  }
 
   void ack(size_t len, uint32_t time);
   size_t send(AsyncClient *client);

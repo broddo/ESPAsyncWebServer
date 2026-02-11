@@ -365,8 +365,22 @@ void AsyncWebSocketClient::_runQueue() {
   if (!_controlQueue.empty() && (_messageQueue.empty() || _messageQueue.front().betweenFrames())
       && webSocketSendFrameWindow(_client) > (size_t)(_controlQueue.front().len() - 1)) {
     _controlQueue.front().send(_client);
-  } else if (!_messageQueue.empty() && _messageQueue.front().betweenFrames() && webSocketSendFrameWindow(_client)) {
-    _messageQueue.front().send(_client);
+  }
+
+  if (!_messageQueue.empty()) {
+    for (auto &msg : _messageQueue) {
+      if (webSocketSendFrameWindow(_client) == 0) {
+        break;
+      }
+      if (!msg.sent()) {
+        msg.send(_client);
+      }
+      // If we haven't finished sending this message, we must stop here to preserve WebSocket ordering.
+      // We can only pipeline subsequent messages if the current one is fully passed to TCP buffer.
+      if (!msg.sent()) {
+        break;
+      }
+    }
   }
 }
 
