@@ -36,7 +36,7 @@ size_t webSocketSendFrameWindow(AsyncClient *client) {
     return 0;
   }
   size_t space = client->space();
-  if (space < 9) {
+  if (space < 128) {
     return 0;
   }
   return space - 8;
